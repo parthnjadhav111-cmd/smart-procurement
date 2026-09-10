@@ -1,0 +1,10 @@
+{
+  "name": "Smart Procurement",
+  "description": "A modern, farmer-friendly agricultural procurement management system for finding centers, booking slots, and tracking live queues.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
