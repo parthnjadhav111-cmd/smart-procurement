@@ -162,15 +162,41 @@ async function startServer() {
   });
 
   // --- Authentication APIs ---
+  app.post('/api/reset-all-data', (req: Request, res: Response) => {
+    // Delete all farmer history and start completely fresh
+    appointments = [];
+    crops = [];
+    weighmentRecords = [];
+    notifications = [];
+    currentServingIndex = 0;
+    queueList = [];
+
+    res.json({
+      success: true,
+      message: 'All farmer history, appointments, weighments, and queues deleted successfully.',
+    });
+  });
+
   app.post('/api/register', (req: Request, res: Response) => {
     const data = req.body;
     const newId = `MH-${(data.district || 'PUN').substring(0, 3).toUpperCase()}-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Delete prior demo history for clean registration from scratch
+    appointments = [];
+    crops = [];
+    weighmentRecords = [];
+    notifications = [];
+    currentServingIndex = 0;
+    queueList = [];
+
     currentFarmer = {
       farmer_id: data.farmer_id || newId,
-      name: data.name || 'Demo Farmer',
+      name: data.name || 'Registered Farmer',
       phone: data.phone || '+91 98000 00000',
       village: data.village || 'Village',
       district: data.district || 'Pune',
+      taluka: data.taluka || 'Haveli',
+      state: data.state || 'Maharashtra',
       latitude: Number(data.latitude) || 18.5204,
       longitude: Number(data.longitude) || 73.8567,
       land_area: Number(data.land_area) || 5.0,
@@ -180,20 +206,40 @@ async function startServer() {
       active_crop: data.main_crop || 'Paddy',
       photo_url: data.photo_url || INITIAL_FARMER.photo_url,
       is_verified: true,
+      aadhaar_number: data.aadhaar_number || '•••• •••• 8841',
+      land_record_712: data.land_record_712 || 'Gat No. 142/A',
+      bank_name: data.bank_name || 'Bank of Maharashtra',
+      bank_account: data.bank_account || '••••••••8841',
+      bank_ifsc: data.bank_ifsc || 'MAHB0001021',
     };
+
+    // If an initial crop was submitted during registration, add it
+    if (data.initial_crop_quantity && Number(data.initial_crop_quantity) > 0) {
+      const initialCrop: CropRecord = {
+        crop_id: `CR-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        farmer_id: currentFarmer.farmer_id,
+        crop_type: data.main_crop || 'Paddy',
+        quantity: Number(data.initial_crop_quantity) || 1000,
+        unit: data.initial_crop_unit || 'kg',
+        harvest_status: data.harvest_status || 'Ready for Procurement',
+        registration_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        preferred_center_id: data.preferred_center_id || 'PC-101',
+      };
+      crops.push(initialCrop);
+    }
 
     // Add welcoming notification
     notifications.unshift({
       notification_id: `NOTIF-${Date.now()}`,
       farmer_id: currentFarmer.farmer_id,
       title: 'Registration Successful',
-      message: `Welcome ${currentFarmer.name}! Your Farmer ID is ${currentFarmer.farmer_id}. You can now register crops and book procurement slots.`,
+      message: `Welcome ${currentFarmer.name}! Your Farmer ID is ${currentFarmer.farmer_id}. You can now select a nearby procurement center and book a delivery time slot.`,
       type: 'status',
       read_status: false,
       created_at: new Date().toISOString(),
     });
 
-    res.status(201).json({ success: true, farmer: currentFarmer });
+    res.status(201).json({ success: true, farmer: currentFarmer, crops });
   });
 
   app.post('/api/login', (req: Request, res: Response) => {
@@ -641,21 +687,36 @@ async function startServer() {
       return res.status(404).json({ error: 'Appointment not found' });
     }
 
-    // Mark as checked in / in progress
-    apt.status = 'Confirmed';
+    // Mark as Checked-In with gate verification timestamp
+    apt.status = 'Checked-In';
+    apt.vehicle_number = vehicle_number;
+    apt.gate_bay = gate_bay;
+    apt.checked_in_at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     // Find in queue and ensure it is in waiting list
-    const qItem = queueList.find((q) => q.token_id === apt.token_id);
-    if (qItem && qItem.status === 'Completed') {
-      qItem.status = 'Waiting';
+    let qItem = queueList.find((q) => q.token_id === apt.token_id);
+    if (!qItem) {
+      qItem = {
+        token_id: apt.token_id,
+        center_id: apt.center_id,
+        farmer_name: apt.farmer_id === currentFarmer.farmer_id ? `${currentFarmer.name} (You)` : `Farmer ${apt.farmer_id}`,
+        crop_type: `${apt.crop_type} (${apt.quantity} ${apt.unit})`,
+        status: 'Waiting',
+        position: queueList.length + 1,
+        is_current_farmer: apt.farmer_id === currentFarmer.farmer_id,
+        time_slot: apt.time_slot,
+      };
+      queueList.push(qItem);
+    } else {
+      if (qItem.status === 'Completed') qItem.status = 'Waiting';
     }
 
     // Add farmer notification
     notifications.unshift({
       notification_id: `NOTIF-${Date.now()}`,
       farmer_id: apt.farmer_id,
-      title: 'Gate Entry Verified',
-      message: `Your vehicle (${vehicle_number}) has been checked in at ${gate_bay}. Please proceed to Parking Lot 2 near Weighbridge.`,
+      title: 'Gate Entry Verified (Bay Assigned)',
+      message: `Your vehicle (${vehicle_number}) has been checked in at ${gate_bay}. Please proceed to Weighbridge Scale.`,
       type: 'queue',
       read_status: false,
       created_at: new Date().toISOString(),

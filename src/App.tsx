@@ -28,6 +28,7 @@ import { CropRegistrationModal } from './components/CropRegistrationModal';
 import { ProcurementStatusModal } from './components/ProcurementStatusModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { AuthModal } from './components/AuthModal';
+import { FarmerRegistrationPanel } from './components/FarmerRegistrationPanel';
 
 export default function App() {
   // Navigation & Language State
@@ -35,6 +36,9 @@ export default function App() {
     'home' | 'centers' | 'schedule' | 'queue' | 'profile' | 'admin'
   >('home');
   const [lang, setLang] = useState<Language>('en');
+
+  // Registration & Session State
+  const [isRegistered, setIsRegistered] = useState<boolean>(false);
 
   // Core Data State
   const [farmer, setFarmer] = useState<FarmerProfile>(INITIAL_FARMER);
@@ -275,6 +279,59 @@ export default function App() {
     showToast('All notifications marked as read.');
   };
 
+  // Reset all data and open fresh registration panel from starting
+  const handleStartNewRegistration = async () => {
+    try {
+      await api.resetAllData();
+    } catch (_) {}
+    setAppointments([]);
+    setQueueData({
+      ...INITIAL_QUEUE_RESPONSE,
+      user_token: '',
+      farmers_ahead: 0,
+      estimated_waiting_mins: 0,
+      recommended_arrival_time: 'Pending Booking',
+      queue_status_label: 'No Active Queue',
+      queue_list: [],
+    });
+    setNotifications([]);
+    setCurrentStageIndex(1);
+    setIsRegistered(false);
+    setActiveTab('home');
+    showToast('All previous farmer history deleted. Opened new registration panel from starting.');
+  };
+
+  // Farmer registration success handler
+  const handleRegisterSuccess = async (newFarmer: FarmerProfile, newCrops?: CropRecord[]) => {
+    setFarmer(newFarmer);
+    setAppointments([]);
+    setQueueData({
+      ...INITIAL_QUEUE_RESPONSE,
+      user_token: '',
+      current_token: 'P-101',
+      farmers_ahead: 0,
+      estimated_waiting_mins: 0,
+      recommended_arrival_time: 'Pending Slot Booking',
+      queue_status_label: 'Registered • Ready to Book Slot',
+      queue_list: [],
+    });
+    setNotifications([
+      {
+        notification_id: `NOTIF-${Date.now()}`,
+        farmer_id: newFarmer.farmer_id,
+        title: 'Registration Complete',
+        message: `Welcome ${newFarmer.name}! Your Farmer ID is ${newFarmer.farmer_id}. Stage 1 (Crop Registered) is complete. Please select your nearest Mandi center and book a slot.`,
+        type: 'status',
+        read_status: false,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    setCurrentStageIndex(1);
+    setIsRegistered(true);
+    setActiveTab('home');
+    showToast(`Welcome ${newFarmer.name}! Registration complete. Ready to book your slot.`);
+  };
+
   // Handle Stage 4 Arrival Confirmation (Farmer Arrived at Gate)
   const handleConfirmArrival = async () => {
     try {
@@ -292,6 +349,20 @@ export default function App() {
   const unreadNotifsCount = notifications.filter((n) => !n.read_status).length;
   const primaryAppt = appointments[0];
   const userToken = primaryAppt ? primaryAppt.token_id : queueData.user_token || 'P-105';
+
+  // If user is not yet registered and not currently inspecting Admin console, show Registration Panel
+  if (!isRegistered && activeTab !== 'admin') {
+    return (
+      <div className="min-h-screen bg-stone-100/90 text-stone-900 font-sans flex flex-col selection:bg-emerald-200">
+        <FarmerRegistrationPanel
+          onRegisterSuccess={handleRegisterSuccess}
+          lang={lang}
+          onLanguageChange={setLang}
+          onOpenAdmin={() => setActiveTab('admin')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-100/90 text-stone-900 font-sans flex flex-col selection:bg-emerald-200">
@@ -315,6 +386,7 @@ export default function App() {
         isAdminView={activeTab === 'admin'}
         onOpenAdmin={() => setActiveTab('admin')}
         onBackToFarmerPortal={() => setActiveTab('home')}
+        onStartNewRegistration={handleStartNewRegistration}
       />
 
       {/* Main Content Area */}
@@ -405,6 +477,7 @@ export default function App() {
             onUpdateProfile={handleUpdateProfile}
             onUpdateLocation={handleUpdateLocation}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onStartNewRegistration={handleStartNewRegistration}
           />
         )}
 

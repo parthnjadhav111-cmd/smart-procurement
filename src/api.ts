@@ -35,7 +35,98 @@ let localOfficer: AdminOfficerProfile = { ...DEFAULT_OFFICER };
 let localWeighments: AdminWeighmentRecord[] = [...INITIAL_ADMIN_WEIGHMENTS];
 
 export const api = {
-  // --- Farmer Profile ---
+  // --- Farmer Profile & Registration ---
+  async resetAllData(): Promise<boolean> {
+    try {
+      await fetch('/api/reset-all-data', { method: 'POST' });
+    } catch (_) {}
+    localAppointments = [];
+    localCrops = [];
+    localNotifications = [];
+    localWeighments = [];
+    localQueue = [];
+    localServingIdx = 0;
+    return true;
+  },
+
+  async registerFarmer(data: any): Promise<{ farmer: FarmerProfile; crops: CropRecord[] }> {
+    try {
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const resp = await res.json();
+        if (resp.farmer) {
+          localFarmer = resp.farmer;
+          localCrops = resp.crops || [];
+          localAppointments = [];
+          localNotifications = [];
+          localWeighments = [];
+          localQueue = [];
+          return { farmer: resp.farmer, crops: resp.crops || [] };
+        }
+      }
+    } catch (_) {}
+
+    const newId = `MH-${(data.district || 'PUN').substring(0, 3).toUpperCase()}-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    localFarmer = {
+      farmer_id: data.farmer_id || newId,
+      name: data.name || 'Registered Farmer',
+      phone: data.phone || '+91 98000 00000',
+      village: data.village || 'Village',
+      district: data.district || 'Pune',
+      taluka: data.taluka || 'Haveli',
+      state: data.state || 'Maharashtra',
+      latitude: Number(data.latitude) || 18.5204,
+      longitude: Number(data.longitude) || 73.8567,
+      land_area: Number(data.land_area) || 5.0,
+      land_unit: data.land_unit || 'Acre',
+      main_crop: data.main_crop || 'Paddy',
+      other_crops: Array.isArray(data.other_crops) ? data.other_crops : ['Wheat'],
+      active_crop: data.main_crop || 'Paddy',
+      photo_url: data.photo_url || INITIAL_FARMER.photo_url,
+      is_verified: true,
+      aadhaar_number: data.aadhaar_number || '•••• •••• 8841',
+      land_record_712: data.land_record_712 || 'Gat No. 142/A',
+      bank_name: data.bank_name || 'Bank of Maharashtra',
+      bank_account: data.bank_account || '••••••••8841',
+      bank_ifsc: data.bank_ifsc || 'MAHB0001021',
+    };
+
+    localAppointments = [];
+    localWeighments = [];
+    localQueue = [];
+    localNotifications = [
+      {
+        notification_id: `NOTIF-${Date.now()}`,
+        farmer_id: localFarmer.farmer_id,
+        title: 'Registration Successful',
+        message: `Welcome ${localFarmer.name}! Your Farmer ID is ${localFarmer.farmer_id}. You can now select a center and book a slot.`,
+        type: 'status',
+        read_status: false,
+        created_at: new Date().toISOString(),
+      },
+    ];
+
+    localCrops = [];
+    if (data.initial_crop_quantity && Number(data.initial_crop_quantity) > 0) {
+      localCrops.push({
+        crop_id: `CR-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        farmer_id: localFarmer.farmer_id,
+        crop_type: data.main_crop || 'Paddy',
+        quantity: Number(data.initial_crop_quantity) || 1000,
+        unit: data.initial_crop_unit || 'kg',
+        harvest_status: data.harvest_status || 'Ready for Procurement',
+        registration_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        preferred_center_id: data.preferred_center_id || 'PC-101',
+      });
+    }
+
+    return { farmer: localFarmer, crops: localCrops };
+  },
+
   async getProfile(): Promise<FarmerProfile> {
     try {
       const res = await fetch('/api/farmer/profile');
@@ -485,12 +576,20 @@ export const api = {
 
     const apt = localAppointments.find((a) => a.appointment_id === appointmentId);
     if (apt) {
-      apt.status = 'Confirmed';
+      apt.status = 'Checked-In';
+      apt.vehicle_number = details.vehicle_number;
+      apt.gate_bay = details.gate_bay;
+      apt.checked_in_at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // also sync queue if present
+      let q = localQueue.find((item) => item.token_id === apt.token_id);
+      if (q && q.status === 'Completed') q.status = 'Waiting';
+
       localNotifications.unshift({
         notification_id: `NOTIF-${Date.now()}`,
         farmer_id: apt.farmer_id,
         title: 'Gate Entry Verified',
-        message: `Vehicle ${details.vehicle_number} checked in at ${details.gate_bay}. Please wait for token call.`,
+        message: `Vehicle ${details.vehicle_number} checked in at ${details.gate_bay}. Please proceed to Weighbridge Scale.`,
         type: 'queue',
         read_status: false,
         created_at: new Date().toISOString(),

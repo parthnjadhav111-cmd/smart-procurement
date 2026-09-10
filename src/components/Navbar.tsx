@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Building2,
   ArrowLeft,
+  UserPlus,
 } from 'lucide-react';
 import { FarmerProfile, Language } from '../types';
 import { translations } from '../translations/translations';
@@ -26,6 +27,7 @@ interface NavbarProps {
   isAdminView?: boolean;
   onOpenAdmin?: () => void;
   onBackToFarmerPortal?: () => void;
+  onStartNewRegistration?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -43,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isAdminView = false,
   onOpenAdmin,
   onBackToFarmerPortal,
+  onStartNewRegistration,
 }) => {
   const t = translations[lang] || translations.en;
   const currentFarmerName = farmer?.name || farmerName || 'Ramesh Patil';
@@ -185,6 +188,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               {currentFarmerId.split('-').slice(-1)[0]}
             </span>
           </button>
+
+          {/* New Registration Reset Button */}
+          {onStartNewRegistration && !isAdminView && (
+            <button
+              onClick={onStartNewRegistration}
+              className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs transition-colors"
+              title="Delete all history and register fresh farmer"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-amber-700" />
+              <span>New Farmer</span>
+            </button>
+          )}
 
           {/* Admin Panel Quick Access Button */}
           {isAdminView ? (

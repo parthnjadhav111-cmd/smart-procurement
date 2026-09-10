@@ -3,7 +3,7 @@ export type Language = 'en' | 'hi' | 'mr';
 export type LandUnit = 'Acre' | 'Hectare' | 'Guntha';
 export type CropType = 'Paddy' | 'Wheat' | 'Soyabean' | 'Cotton' | 'Maize' | 'Gram (Chana)' | 'Sugarcane';
 export type HarvestStatus = 'Ready for Procurement' | 'Harvested & Stored' | 'Harvesting in Progress';
-export type AppointmentStatus = 'Confirmed' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'Late';
+export type AppointmentStatus = 'Confirmed' | 'Checked-In' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'Late';
 
 export interface FarmerProfile {
   farmer_id: string;
@@ -11,6 +11,8 @@ export interface FarmerProfile {
   phone: string;
   village: string;
   district: string;
+  taluka?: string;
+  state?: string;
   latitude: number;
   longitude: number;
   land_area: number;
@@ -20,6 +22,11 @@ export interface FarmerProfile {
   active_crop?: CropType;
   photo_url?: string;
   is_verified?: boolean;
+  aadhaar_number?: string;
+  land_record_712?: string;
+  bank_name?: string;
+  bank_account?: string;
+  bank_ifsc?: string;
 }
 
 export interface CenterSlot {
@@ -79,6 +86,9 @@ export interface Appointment {
   status: AppointmentStatus;
   created_at: string;
   is_late?: boolean;
+  vehicle_number?: string;
+  gate_bay?: string;
+  checked_in_at?: string;
 }
 
 export interface QueueItem {

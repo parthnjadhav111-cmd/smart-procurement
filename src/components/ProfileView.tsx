@@ -24,6 +24,7 @@ interface ProfileViewProps {
   onUpdateProfile: (updates: Partial<FarmerProfile>) => Promise<void>;
   onUpdateLocation: (lat: number, lng: number) => Promise<void>;
   onOpenAuthModal: () => void;
+  onStartNewRegistration?: () => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -32,6 +33,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onUpdateProfile,
   onUpdateLocation,
   onOpenAuthModal,
+  onStartNewRegistration,
 }) => {
   const safeFarmer = farmer || INITIAL_FARMER;
   const t = translations[lang] || translations.en;
@@ -359,6 +361,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* Reset & Start Fresh Farmer Registration Section */}
+        {onStartNewRegistration && (
+          <div className="bg-amber-50/70 border border-amber-300 rounded-3xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                  Reset Account & Start Fresh Registration
+                </h4>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Wipe all existing appointment history, weighments, and tokens to open the registration panel from starting.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to delete all farmer history and start fresh from the registration panel?')) {
+                    onStartNewRegistration();
+                  }
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all shrink-0"
+              >
+                Delete History & Register Fresh
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Save button if editing */}
         {isEditing && (

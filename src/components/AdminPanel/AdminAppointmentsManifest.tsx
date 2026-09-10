@@ -111,9 +111,12 @@ export const AdminAppointmentsManifest: React.FC<AdminAppointmentsManifestProps>
               className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
             >
               <option value="All">All Time Slots (Morning & Afternoon)</option>
-              <option value="09:00">09:00 AM – 10:00 AM</option>
-              <option value="10:00">10:00 AM – 11:00 AM</option>
-              <option value="11:00">11:00 AM – 12:00 PM</option>
+              <option value="08:">08:00 AM – 09:30 AM</option>
+              <option value="09:">09:00 AM – 10:30 AM</option>
+              <option value="10:">10:00 AM – 11:30 AM</option>
+              <option value="11:">11:00 AM – 12:30 PM</option>
+              <option value="01:">01:00 PM – 02:30 PM</option>
+              <option value="02:">02:00 PM – 03:30 PM</option>
             </select>
           </div>
 
@@ -124,7 +127,8 @@ export const AdminAppointmentsManifest: React.FC<AdminAppointmentsManifestProps>
               className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
             >
               <option value="All">All Statuses</option>
-              <option value="Confirmed">Confirmed / Gate Check-in Pending</option>
+              <option value="Confirmed">Confirmed (Waiting at Gate)</option>
+              <option value="Checked-In">Checked-In (In Yard / Weighbridge)</option>
               <option value="Completed">Completed (Weighed & Paid)</option>
               <option value="Rescheduled">Rescheduled</option>
             </select>
@@ -142,7 +146,7 @@ export const AdminAppointmentsManifest: React.FC<AdminAppointmentsManifestProps>
                 <th className="p-3.5">Farmer & Reg ID</th>
                 <th className="p-3.5">Crop & Booked Qty</th>
                 <th className="p-3.5">Assigned Slot</th>
-                <th className="p-3.5">Center Bay</th>
+                <th className="p-3.5">Center Bay & Vehicle</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5 text-right">Gate Action</th>
               </tr>
@@ -167,23 +171,39 @@ export const AdminAppointmentsManifest: React.FC<AdminAppointmentsManifestProps>
                   </td>
                   <td className="p-3.5 font-mono text-stone-700 font-medium">{apt.time_slot}</td>
                   <td className="p-3.5 text-stone-600">
-                    <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-700 font-mono text-[11px]">
-                      Bay 1 / Yard 2
-                    </span>
+                    <div className="font-mono text-[11px]">
+                      <span className="font-bold text-emerald-800">{apt.gate_bay || 'Bay A (Main Gate)'}</span>
+                      {apt.vehicle_number && (
+                        <div className="text-[10px] text-stone-500 flex items-center gap-1 mt-0.5">
+                          <Truck className="w-3 h-3 text-stone-400" />
+                          <span>{apt.vehicle_number}</span>
+                        </div>
+                      )}
+                      {apt.checked_in_at && (
+                        <div className="text-[9px] text-emerald-700 font-semibold">
+                          Gate entry: {apt.checked_in_at}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3.5">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                        apt.status === 'Completed'
-                          ? 'bg-stone-100 text-stone-600 border border-stone-200'
-                          : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      }`}
-                    >
-                      {apt.status}
-                    </span>
+                    {apt.status === 'Completed' ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-stone-100 text-stone-600 border border-stone-200">
+                        Completed
+                      </span>
+                    ) : apt.status === 'Checked-In' ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                        Gate Checked-In
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                        Confirmed / At Gate
+                      </span>
+                    )}
                   </td>
                   <td className="p-3.5 text-right">
-                    {apt.status !== 'Completed' ? (
+                    {apt.status === 'Confirmed' ? (
                       <button
                         onClick={() => handleOpenCheckIn(apt)}
                         className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-xs transition-all inline-flex items-center gap-1.5"
@@ -191,6 +211,11 @@ export const AdminAppointmentsManifest: React.FC<AdminAppointmentsManifestProps>
                         <Truck className="w-3.5 h-3.5" />
                         Gate Check-In
                       </button>
+                    ) : apt.status === 'Checked-In' ? (
+                      <span className="text-blue-700 font-bold text-[11px] inline-flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                        At Weighbridge
+                      </span>
                     ) : (
                       <span className="text-emerald-700 font-bold text-[11px] inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
