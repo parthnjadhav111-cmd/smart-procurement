@@ -24,7 +24,9 @@ import {
   AdminWeighmentRecord,
   AdminOfficerProfile,
   AdminStats,
+  CenterSlot,
 } from './src/types';
+import { db, ENRICHED_SLOTS } from './server/db';
 
 async function startServer() {
   const app = express();
@@ -32,133 +34,71 @@ async function startServer() {
 
   app.use(express.json());
 
-  // In-memory persistent state initialized with realistic data
-  let currentFarmer: FarmerProfile = { ...INITIAL_FARMER };
-  let centers: ProcurementCenter[] = [...INITIAL_CENTERS];
-  let crops: CropRecord[] = [...INITIAL_CROPS];
-  let queueList: QueueItem[] = [...INITIAL_QUEUE_LIST];
-  let notifications: NotificationItem[] = [...INITIAL_NOTIFICATIONS];
-  let currentServingIndex = 0; // P-101 is index 0
-  let currentOfficer: AdminOfficerProfile = { ...DEFAULT_OFFICER };
-  let weighmentRecords: AdminWeighmentRecord[] = [...INITIAL_ADMIN_WEIGHMENTS];
+  // Persistent database backed state
+  let currentFarmer: FarmerProfile = db.get('farmers')?.[0] || { ...INITIAL_FARMER };
+  let centers: ProcurementCenter[] = db.get('centers') || [...INITIAL_CENTERS];
+  let crops: CropRecord[] = db.get('crops') || [...INITIAL_CROPS];
+  let slots: CenterSlot[] = db.get('slots') || [...ENRICHED_SLOTS];
+  let queueList: QueueItem[] = db.get('queueList') || [...INITIAL_QUEUE_LIST];
+  let notifications: NotificationItem[] = db.get('notifications') || [...INITIAL_NOTIFICATIONS];
+  let currentServingIndex: number = db.get('currentServingIndex') ?? 0;
+  let currentOfficer: AdminOfficerProfile = db.get('officers')?.[0] || { ...DEFAULT_OFFICER };
+  let weighmentRecords: AdminWeighmentRecord[] = db.get('weighmentRecords') || [...INITIAL_ADMIN_WEIGHMENTS];
+  let appointments: Appointment[] = db.get('appointments') || [];
 
-  // Full appointment roster for center management
-  let appointments: Appointment[] = [
-    {
-      appointment_id: 'APT-2026-901',
-      farmer_id: 'MH-PUN-2026-1102',
-      crop_id: 'CR-2026-0911',
-      crop_type: 'Paddy',
-      quantity: 1200,
-      unit: 'kg',
-      center_id: 'PC-101',
-      center_name: 'Pune District Procurement Center',
-      center_address: 'APMC Yard, Swargate Link Road, Pune',
-      center_lat: 18.5204,
-      center_lng: 73.8567,
-      date: '10 September 2026',
-      time_slot: '09:00 AM – 10:00 AM',
-      token_id: 'P-101',
-      status: 'Confirmed',
-      created_at: '2026-09-08T09:10:00Z',
-    },
-    {
-      appointment_id: 'APT-2026-902',
-      farmer_id: 'MH-PUN-2026-1405',
-      crop_type: 'Wheat',
-      crop_id: 'CR-2026-0922',
-      quantity: 1500,
-      unit: 'kg',
-      center_id: 'PC-101',
-      center_name: 'Pune District Procurement Center',
-      center_address: 'APMC Yard, Swargate Link Road, Pune',
-      center_lat: 18.5204,
-      center_lng: 73.8567,
-      date: '10 September 2026',
-      time_slot: '09:30 AM – 10:30 AM',
-      token_id: 'P-102',
-      status: 'Confirmed',
-      created_at: '2026-09-08T09:20:00Z',
-    },
-    {
-      appointment_id: 'APT-2026-903',
-      farmer_id: 'MH-PUN-2026-1899',
-      crop_type: 'Paddy',
-      crop_id: 'CR-2026-0933',
-      quantity: 950,
-      unit: 'kg',
-      center_id: 'PC-101',
-      center_name: 'Pune District Procurement Center',
-      center_address: 'APMC Yard, Swargate Link Road, Pune',
-      center_lat: 18.5204,
-      center_lng: 73.8567,
-      date: '10 September 2026',
-      time_slot: '10:00 AM – 11:00 AM',
-      token_id: 'P-103',
-      status: 'Confirmed',
-      created_at: '2026-09-08T10:00:00Z',
-    },
-    {
-      appointment_id: 'APT-2026-904',
-      farmer_id: 'MH-PUN-2026-8841',
-      crop_id: 'CR-2026-1027',
-      crop_type: 'Paddy',
-      quantity: 800,
-      unit: 'kg',
-      center_id: 'PC-101',
-      center_name: 'Pune District Procurement Center',
-      center_address: 'APMC Yard, Market Yard Gate 2, Swargate Link Road, Pune',
-      center_lat: 18.5204,
-      center_lng: 73.8567,
-      date: '10 September 2026',
-      time_slot: '10:00 AM – 11:00 AM',
-      token_id: 'P-105',
-      status: 'Confirmed',
-      created_at: '2026-09-08T14:30:00Z',
-    },
-    {
-      appointment_id: 'APT-2026-905',
-      farmer_id: 'MH-PUN-2026-2180',
-      crop_type: 'Wheat',
-      crop_id: 'CR-2026-0944',
-      quantity: 1100,
-      unit: 'kg',
-      center_id: 'PC-101',
-      center_name: 'Pune District Procurement Center',
-      center_address: 'APMC Yard, Swargate Link Road, Pune',
-      center_lat: 18.5204,
-      center_lng: 73.8567,
-      date: '10 September 2026',
-      time_slot: '10:00 AM – 11:00 AM',
-      token_id: 'P-104',
-      status: 'Confirmed',
-      created_at: '2026-09-08T11:00:00Z',
-    },
-    {
-      appointment_id: 'APT-2026-906',
-      farmer_id: 'MH-PUN-2026-2391',
-      crop_type: 'Paddy',
-      crop_id: 'CR-2026-0955',
-      quantity: 1400,
-      unit: 'kg',
-      center_id: 'PC-101',
-      center_name: 'Pune District Procurement Center',
-      center_address: 'APMC Yard, Swargate Link Road, Pune',
-      center_lat: 18.5204,
-      center_lng: 73.8567,
-      date: '10 September 2026',
-      time_slot: '10:30 AM – 11:30 AM',
-      token_id: 'P-106',
-      status: 'Confirmed',
-      created_at: '2026-09-08T11:30:00Z',
-    },
-  ];
+  const syncDb = () => {
+    const allFarmers = db.get('farmers') || [];
+    const idx = allFarmers.findIndex((f) => f.farmer_id === currentFarmer.farmer_id);
+    if (idx >= 0) {
+      allFarmers[idx] = currentFarmer;
+    } else {
+      allFarmers.unshift(currentFarmer);
+    }
+    db.set('farmers', allFarmers);
+    db.set('centers', centers);
+    db.set('crops', crops);
+    db.set('slots', slots);
+    db.set('queueList', queueList);
+    db.set('notifications', notifications);
+    db.set('currentServingIndex', currentServingIndex);
+    db.set('weighmentRecords', weighmentRecords);
+    db.set('appointments', appointments);
+  };
 
   // ---------------- REST APIs (Section 19) ----------------
 
   // Health check
   app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
+  });
+
+  // Persistent Database Health & Status (Section 20)
+  app.get('/api/database/status', (req: Request, res: Response) => {
+    const all = db.getAll();
+    res.json({
+      status: 'healthy',
+      persistent: true,
+      file: 'data/procurement_db.json',
+      schema_version: all.version,
+      last_updated: all.lastUpdated,
+      counts: {
+        demo_farmers: all.farmers?.length || 5,
+        appointments: appointments.length,
+        centers: centers.length,
+        queue_items: queueList.length,
+        weighments: weighmentRecords.length,
+      },
+    });
+  });
+
+  // Demo Farmers Roster
+  app.get('/api/demo-farmers', (req: Request, res: Response) => {
+    res.json(db.get('farmers') || []);
+  });
+
+  // Slots with Booked Demo Farmers
+  app.get('/api/slots/with-farmers', (req: Request, res: Response) => {
+    res.json(db.get('slots') || []);
   });
 
   // --- Authentication APIs ---
@@ -170,6 +110,7 @@ async function startServer() {
     notifications = [];
     currentServingIndex = 0;
     queueList = [];
+    syncDb();
 
     res.json({
       success: true,
@@ -317,11 +258,11 @@ async function startServer() {
       return res.status(404).json({ error: 'Center not found' });
     }
     const dist = calculateDistanceKm(currentFarmer.latitude, currentFarmer.longitude, center.latitude, center.longitude);
-    res.json({ ...center, distance_km: dist, available_slot_details: INITIAL_SLOTS });
+    res.json({ ...center, distance_km: dist, available_slot_details: slots });
   });
 
   app.get('/api/centers/:center_id/slots', (req: Request, res: Response) => {
-    res.json(INITIAL_SLOTS);
+    res.json(slots);
   });
 
   // --- Crops APIs ---
@@ -351,36 +292,109 @@ async function startServer() {
   });
 
   app.post('/api/appointments', (req: Request, res: Response) => {
-    const { crop_id, center_id, date, time_slot } = req.body;
+    const {
+      crop_id,
+      center_id,
+      date,
+      time_slot,
+      slot_id,
+      crop_type,
+      quantity,
+      unit,
+      vehicle_number,
+      vehicle_type,
+      driver_name,
+      driver_phone,
+      moisture_content,
+      gat_number,
+      variety,
+      bags_count,
+    } = req.body;
+
     const center = centers.find((c) => c.center_id === center_id) || centers[0];
     const crop = crops.find((c) => c.crop_id === crop_id) || crops[0];
 
-    // Generate unique token for this center and slot
-    const tokenNumber = 100 + queueList.length + 1;
-    const token_id = `P-${tokenNumber}`;
+    // Find the requested slot in the center's slots
+    const targetSlot = slots.find((s) => s.id === slot_id || s.time_range === time_slot) || slots.find((s) => s.available_slots > 0) || slots[1];
+
+    // Check if slot is unavailable / full
+    if (targetSlot && targetSlot.available_slots <= 0) {
+      return res.status(400).json({
+        error: 'Slot not available',
+        message: `The time slot ${targetSlot.time_range} is fully booked. Please select an available slot.`,
+      });
+    }
+
+    // TOKEN ID IS GENERATED ONLY NOW AFTER SCHEDULING WITH ALL DETAILS FILLED
+    let maxTokenNum = 105;
+    queueList.forEach((q) => {
+      const match = q.token_id.match(/P-(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxTokenNum) maxTokenNum = n;
+      }
+    });
+    appointments.forEach((a) => {
+      const match = a.token_id.match(/P-(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxTokenNum) maxTokenNum = n;
+      }
+    });
+    const token_id = `P-${maxTokenNum + 1}`;
+
+    const finalCropType = crop_type || (crop ? crop.crop_type : currentFarmer.main_crop || 'Paddy');
+    const finalQuantity = Number(quantity) || (crop ? crop.quantity : 800);
+    const finalUnit = unit || (crop ? crop.unit : 'kg');
+    const finalVehicleNum = vehicle_number || currentFarmer.vehicle_number || 'MH-12-TR-8841';
 
     const newAppointment: Appointment = {
       appointment_id: `APT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       farmer_id: currentFarmer.farmer_id,
-      crop_id: crop ? crop.crop_id : 'CR-2026-1027',
-      crop_type: crop ? crop.crop_type : 'Paddy',
-      quantity: crop ? crop.quantity : 800,
-      unit: crop ? crop.unit : 'kg',
+      crop_id: crop ? crop.crop_id : `CR-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      crop_type: finalCropType,
+      quantity: finalQuantity,
+      unit: finalUnit,
       center_id: center.center_id,
       center_name: center.name,
       center_address: center.address,
       center_lat: center.latitude,
       center_lng: center.longitude,
       date: date || '10 September 2026',
-      time_slot: time_slot || '10:00 AM – 11:00 AM',
-      token_id: token_id,
+      time_slot: targetSlot ? targetSlot.time_range : (time_slot || '10:00 AM – 11:00 AM'),
+      token_id: token_id, // Generated upon schedule!
       status: 'Confirmed',
       created_at: new Date().toISOString(),
+      vehicle_number: finalVehicleNum,
+      vehicle_type: vehicle_type || 'Tractor Trolley',
+      driver_name: driver_name || currentFarmer.name,
+      driver_phone: driver_phone || currentFarmer.phone,
+      moisture_content: moisture_content ? Number(moisture_content) : 12.0,
+      gat_number: gat_number || 'Gat No. 142/B',
+      variety: variety || 'Grade A',
+      bags_count: bags_count ? Number(bags_count) : Math.round(finalQuantity / 50),
+      gate_bay: 'Bay A (Main Weighbridge)',
     };
 
     appointments.unshift(newAppointment);
 
-    // Add to queue
+    // Update target slot availability and add farmer to booked_farmers list
+    if (targetSlot) {
+      targetSlot.available_slots = Math.max(0, targetSlot.available_slots - 1);
+      if (!targetSlot.booked_farmers) targetSlot.booked_farmers = [];
+      targetSlot.booked_farmers.push({
+        token_id,
+        farmer_id: currentFarmer.farmer_id,
+        farmer_name: `${currentFarmer.name} (You)`,
+        crop_type: `${finalCropType} (${finalQuantity} ${finalUnit})`,
+        quantity: finalQuantity,
+        vehicle_number: finalVehicleNum,
+        gate_status: 'Scheduled',
+        arrival_time: 'Scheduled',
+      });
+    }
+
+    // Add to queue with is_current_farmer: true
     queueList.push({
       token_id,
       center_id: center.center_id,
@@ -390,18 +404,28 @@ async function startServer() {
       position: queueList.length + 1,
       is_current_farmer: true,
       time_slot: newAppointment.time_slot,
+      vehicle_number: newAppointment.vehicle_number,
+      gate_bay: 'Bay A',
+      gate_permitted: false,
     });
 
     // Add notification
     notifications.unshift({
       notification_id: `NOTIF-${Date.now()}`,
       farmer_id: currentFarmer.farmer_id,
-      title: 'Procurement Slot Confirmed',
-      message: `Token ${token_id} booked at ${center.name} on ${newAppointment.date}, slot ${newAppointment.time_slot}.`,
+      title: `Token ${token_id} Generated!`,
+      message: `Your procurement slot is confirmed for ${newAppointment.crop_type} (${newAppointment.quantity} ${newAppointment.unit}) at ${center.name}. Your official Digital Token ID is ${token_id}.`,
       type: 'appointment',
       read_status: false,
       created_at: new Date().toISOString(),
+      digital_token: token_id,
+      on_time_status: `On-Time (${newAppointment.time_slot})`,
+      assigned_bay: 'Bay A (Main Weighbridge)',
+      vehicle_number: finalVehicleNum,
+      can_cancel: true,
     });
+
+    syncDb();
 
     res.status(201).json(newAppointment);
   });
@@ -416,6 +440,7 @@ async function startServer() {
     if (status) apt.status = status;
     if (time_slot) apt.time_slot = time_slot;
     if (date) apt.date = date;
+    syncDb();
 
     res.json({ success: true, appointment: apt });
   });
@@ -453,32 +478,40 @@ async function startServer() {
 
   app.get('/api/queue/:token_id', (req: Request, res: Response) => {
     const tokenId = req.params.token_id;
-    const targetApt = appointments.find((a) => a.token_id === tokenId) || appointments[0];
+    const isTokenSpecified = tokenId && tokenId !== 'undefined' && tokenId !== 'null' && tokenId !== '';
+    const targetApt = isTokenSpecified
+      ? appointments.find((a) => a.token_id === tokenId)
+      : appointments[0];
     const center = centers.find((c) => c.center_id === (targetApt ? targetApt.center_id : 'PC-101')) || centers[0];
 
     const currentItem = queueList[currentServingIndex] || queueList[0];
     const currentToken = currentItem ? currentItem.token_id : 'P-101';
-    const userToken = tokenId || (targetApt ? targetApt.token_id : 'P-105');
+    const userToken = isTokenSpecified ? tokenId : (targetApt ? targetApt.token_id : '');
 
-    const userIndex = queueList.findIndex((item) => item.token_id === userToken);
-    const farmersAhead = userIndex >= 0 ? Math.max(0, userIndex - currentServingIndex) : 4;
+    const userIndex = userToken ? queueList.findIndex((item) => item.token_id === userToken) : -1;
+    const farmersAhead = userIndex >= 0 ? Math.max(0, userIndex - currentServingIndex) : 0;
 
     const activeCounters = center.active_counters || 2;
     const avgTime = center.avg_processing_mins || 7;
 
     // Formula: Farmers Ahead × Avg Processing Time ÷ Active Counters
-    const estimatedWaitingMins = Math.round((farmersAhead * avgTime) / activeCounters);
+    const estimatedWaitingMins = userIndex >= 0 ? Math.round((farmersAhead * avgTime) / activeCounters) : 0;
 
     // AI Prediction: adds historical variance, grain test time factor
     const aiPredictionMins = Math.max(0, Math.round(estimatedWaitingMins * 0.92));
 
     // Calculate recommended arrival time based on wait
-    const now = new Date();
-    const arrivalTime = new Date(now.getTime() + Math.max(5, estimatedWaitingMins - 10) * 60000);
-    const recommended_arrival_time = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    let recommended_arrival_time = '--';
+    if (userIndex >= 0) {
+      const now = new Date();
+      const arrivalTime = new Date(now.getTime() + Math.max(5, estimatedWaitingMins - 10) * 60000);
+      recommended_arrival_time = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
 
-    let queue_status_label: 'Moving Normally' | 'Slow Movement' | 'Your Turn Now' | 'Counter Paused' = 'Moving Normally';
-    if (farmersAhead === 0 && currentServingIndex === userIndex) {
+    let queue_status_label: 'Moving Normally' | 'Slow Movement' | 'Your Turn Now' | 'Counter Paused' | 'Pending Booking' = 'Moving Normally';
+    if (userIndex < 0) {
+      queue_status_label = 'Pending Booking';
+    } else if (farmersAhead === 0 && currentServingIndex === userIndex) {
       queue_status_label = 'Your Turn Now';
     } else if (farmersAhead <= 1) {
       queue_status_label = 'Moving Normally';
@@ -497,7 +530,7 @@ async function startServer() {
       queue_list: queueList,
       active_counters: activeCounters,
       avg_time_per_farmer: avgTime,
-      scheduled_slot: targetApt ? targetApt.time_slot : '10:00 AM – 11:00 AM',
+      scheduled_slot: targetApt ? targetApt.time_slot : '',
       is_late: targetApt ? !!targetApt.is_late : false,
       grace_period_mins: 15,
     });
@@ -678,22 +711,23 @@ async function startServer() {
     res.json(list);
   });
 
-  // Gate Check-in for arriving farmer vehicle
+  // Gate Check-in and Permission Grant for arriving farmer vehicle
   app.post('/api/admin/appointments/:id/check-in', (req: Request, res: Response) => {
     const { id } = req.params;
-    const { vehicle_number = 'MH-12-TR-0000', gate_bay = 'Bay A' } = req.body;
-    const apt = appointments.find((a) => a.appointment_id === id);
+    const { vehicle_number = 'MH-12-TR-8841', gate_bay = 'Bay A (Main Weighbridge)' } = req.body;
+    const apt = appointments.find((a) => a.appointment_id === id || a.token_id === id);
     if (!apt) {
       return res.status(404).json({ error: 'Appointment not found' });
     }
 
     // Mark as Checked-In with gate verification timestamp
     apt.status = 'Checked-In';
+    apt.gate_permission_granted = true;
     apt.vehicle_number = vehicle_number;
     apt.gate_bay = gate_bay;
     apt.checked_in_at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Find in queue and ensure it is in waiting list
+    // Find in queue and ensure it is updated with gate permission
     let qItem = queueList.find((q) => q.token_id === apt.token_id);
     if (!qItem) {
       qItem = {
@@ -705,24 +739,141 @@ async function startServer() {
         position: queueList.length + 1,
         is_current_farmer: apt.farmer_id === currentFarmer.farmer_id,
         time_slot: apt.time_slot,
+        vehicle_number,
+        gate_bay,
+        gate_permitted: true,
       };
       queueList.push(qItem);
     } else {
+      qItem.gate_permitted = true;
+      qItem.vehicle_number = vehicle_number;
+      qItem.gate_bay = gate_bay;
       if (qItem.status === 'Completed') qItem.status = 'Waiting';
     }
 
-    // Add farmer notification
+    // Add farmer notification with all required fields (Token, On-time, Grace Period, Bay, Slot Release Warning)
     notifications.unshift({
       notification_id: `NOTIF-${Date.now()}`,
       farmer_id: apt.farmer_id,
-      title: 'Gate Entry Verified (Bay Assigned)',
-      message: `Your vehicle (${vehicle_number}) has been checked in at ${gate_bay}. Please proceed to Weighbridge Scale.`,
+      title: 'Gate Permission Granted by Center Admin!',
+      message: `Mandi Admin Officer ${currentOfficer.name} verified vehicle ${vehicle_number} at ${gate_bay}. Please proceed onto weighbridge scale.`,
       type: 'queue',
+      read_status: false,
+      created_at: new Date().toISOString(),
+      digital_token: apt.token_id,
+      on_time_status: `On-Time Verified (${apt.time_slot})`,
+      assigned_bay: gate_bay,
+      vehicle_number,
+      grace_period_mins: 15,
+      grace_period_deadline: '15 Minutes Grace Period Active',
+      slot_release_warning: 'Unreported slots will be automatically cancelled and released to the next standby farmer.',
+      can_cancel: true,
+    });
+
+    res.json({ success: true, appointment: apt, vehicle_number, gate_bay, queue_item: qItem });
+  });
+
+  // Dedicated endpoint for granting gate permission
+  app.post('/api/admin/appointments/:id/grant-permission', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { vehicle_number = 'MH-12-TR-8841', gate_bay = 'Bay A (Main Weighbridge)' } = req.body;
+    const apt = appointments.find((a) => a.appointment_id === id || a.token_id === id);
+    if (!apt) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    apt.status = 'Checked-In';
+    apt.gate_permission_granted = true;
+    apt.vehicle_number = vehicle_number;
+    apt.gate_bay = gate_bay;
+    apt.checked_in_at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let qItem = queueList.find((q) => q.token_id === apt.token_id);
+    if (qItem) {
+      qItem.gate_permitted = true;
+      qItem.vehicle_number = vehicle_number;
+      qItem.gate_bay = gate_bay;
+    }
+
+    notifications.unshift({
+      notification_id: `NOTIF-GATE-${Date.now()}`,
+      farmer_id: apt.farmer_id,
+      title: 'Gate Entry Approved by Center Admin',
+      message: `Center Admin ${currentOfficer.name} approved gate entry. Assigned: ${gate_bay}. Please proceed for weighbridge gross measurement.`,
+      type: 'queue',
+      read_status: false,
+      created_at: new Date().toISOString(),
+      digital_token: apt.token_id,
+      on_time_status: `On-Time (${apt.time_slot})`,
+      assigned_bay: gate_bay,
+      vehicle_number,
+      grace_period_mins: 15,
+      grace_period_deadline: '15 Minutes Active',
+      slot_release_warning: 'Unreported slots will be released to standby queue if vehicle does not report within 15 minutes.',
+      can_cancel: true,
+    });
+
+    res.json({ success: true, appointment: apt, queue_item: qItem });
+  });
+
+  // Farmer cancels appointment & releases slot
+  app.post('/api/farmer/release-slot', (req: Request, res: Response) => {
+    const { token_id } = req.body;
+    const targetToken = token_id || 'P-105';
+    const apt = appointments.find((a) => a.token_id === targetToken);
+    if (apt) {
+      apt.status = 'Cancelled';
+    }
+
+    const qIdx = queueList.findIndex((q) => q.token_id === targetToken);
+    if (qIdx >= 0) {
+      queueList.splice(qIdx, 1);
+    }
+
+    notifications.unshift({
+      notification_id: `NOTIF-CANCEL-${Date.now()}`,
+      farmer_id: apt?.farmer_id || currentFarmer.farmer_id,
+      title: 'Slot Cancelled & Released',
+      message: `Token ${targetToken} has been released. The standby queue has been advanced. You may book another slot whenever convenient.`,
+      type: 'status',
       read_status: false,
       created_at: new Date().toISOString(),
     });
 
-    res.json({ success: true, appointment: apt, vehicle_number, gate_bay });
+    res.json({ success: true, message: `Slot ${targetToken} cancelled and released.` });
+  });
+
+  // Get Live Procurement Tracking connected to Center Admin
+  app.get('/api/farmer/procurement-status', (req: Request, res: Response) => {
+    const apt = appointments.find((a) => a.farmer_id === currentFarmer.farmer_id) || appointments[0];
+    const center = centers.find((c) => c.center_id === (apt?.center_id || 'PC-101')) || centers[0];
+    const isGateGranted = !!apt?.gate_permission_granted || apt?.status === 'Checked-In';
+    const currentStage = apt?.status === 'Completed' ? 7 : isGateGranted ? 5 : 4;
+
+    res.json({
+      success: true,
+      current_stage_index: currentStage,
+      center_admin: {
+        officer_id: currentOfficer.officer_id,
+        name: currentOfficer.name,
+        role: currentOfficer.role,
+        phone: currentOfficer.phone,
+        center_id: center.center_id,
+        center_name: center.name,
+        live_sync_status: 'Connected (Live APMC Ingress)',
+      },
+      appointment: apt,
+      gate_permission_granted: isGateGranted,
+      assigned_bay: apt?.gate_bay || 'Bay A (Main Weighbridge)',
+      vehicle_number: apt?.vehicle_number || 'MH-12-TR-8841',
+      checked_in_at: apt?.checked_in_at || null,
+      queue_summary: {
+        current_token: queueList[currentServingIndex]?.token_id || 'P-101',
+        user_token: apt?.token_id || 'P-105',
+        farmers_ahead: Math.max(0, queueList.findIndex((q) => q.token_id === apt?.token_id) - currentServingIndex),
+        active_counters: center.active_counters,
+      },
+    });
   });
 
   // Admin Officer calls specific or next token

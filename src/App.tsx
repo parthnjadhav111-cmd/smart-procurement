@@ -12,7 +12,7 @@ import {
 } from './types';
 import { api } from './api';
 import { translations } from './translations/translations';
-import { INITIAL_FARMER, INITIAL_DASHBOARD_DATA, INITIAL_QUEUE_RESPONSE, calculateDistanceKm } from './data/mockData';
+import { INITIAL_FARMER, INITIAL_DASHBOARD_DATA, INITIAL_QUEUE_RESPONSE, calculateDistanceKm, DEFAULT_OFFICER } from './data/mockData';
 
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
@@ -27,8 +27,10 @@ import { CenterDetailsModal } from './components/CenterDetailsModal';
 import { CropRegistrationModal } from './components/CropRegistrationModal';
 import { ProcurementStatusModal } from './components/ProcurementStatusModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
-import { AuthModal } from './components/AuthModal';
+import { LoginPortal } from './components/LoginPortal';
 import { FarmerRegistrationPanel } from './components/FarmerRegistrationPanel';
+import { AgriculturalBackground } from './components/AgriculturalBackground';
+import { AmazonLoginModal } from './components/AmazonLoginModal';
 
 export default function App() {
   // Navigation & Language State
@@ -38,7 +40,8 @@ export default function App() {
   const [lang, setLang] = useState<Language>('en');
 
   // Registration & Session State
-  const [isRegistered, setIsRegistered] = useState<boolean>(false);
+  const [isRegistered, setIsRegistered] = useState<boolean>(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   // Core Data State
   const [farmer, setFarmer] = useState<FarmerProfile>(INITIAL_FARMER);
@@ -346,9 +349,92 @@ export default function App() {
     setNotifications(notifs);
   };
 
+  // Handle Admin Granting Gate Permission for Farmer
+  const handleGrantGatePermissionForFarmer = async (token?: string) => {
+    const targetToken = token || userToken;
+    try {
+      const res = await api.grantGatePermission(targetToken, {
+        vehicle_number: farmer.vehicle_number || 'MH-12-TR-8841',
+        gate_bay: 'Bay A (Main Weighbridge)',
+      });
+      if (res) {
+        setCurrentStageIndex(5);
+        showToast('✓ Gate permission granted by Mandi Admin! Farmer notified with Digital Token & Bay A.');
+        if (speechEnabled) {
+          handleAnnounce('Gate permission granted by Mandi Admin! Please proceed to Weighbridge Bay A.');
+        }
+        const [updatedNotifs, updatedQ] = await Promise.all([
+          api.getNotifications(),
+          api.getQueueStatus(targetToken),
+        ]);
+        setNotifications(updatedNotifs);
+        setQueueData(updatedQ);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Handle Farmer Releasing Slot / Cancelling
+  const handleReleaseSlot = async (slotId: string, reason?: string) => {
+    try {
+      const res = await api.releaseSlot(slotId, reason);
+      if (res) {
+        showToast('✓ Slot released successfully. Assigned to waiting farmer in grace period.');
+        const [updatedApts, updatedNotifs, updatedQ] = await Promise.all([
+          api.getAppointments(),
+          api.getNotifications(),
+          api.getQueueStatus(userToken),
+        ]);
+        setAppointments(updatedApts);
+        setNotifications(updatedNotifs);
+        setQueueData(updatedQ);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const unreadNotifsCount = notifications.filter((n) => !n.read_status).length;
   const primaryAppt = appointments[0];
   const userToken = primaryAppt ? primaryAppt.token_id : queueData.user_token || 'P-105';
+
+  // Initial Landing Screen: Amazon-style Login Pop-up with Green Paddy & Wheat Grain Slide Animation
+  if (!isLoggedIn) {
+    return (
+      <AgriculturalBackground>
+        <AmazonLoginModal
+          isOpen={true}
+          onFarmerLoginSuccess={(loggedFarmer) => {
+            setFarmer(loggedFarmer);
+            setIsLoggedIn(true);
+            setIsRegistered(true);
+            setActiveTab('home');
+            showToast(`Welcome ${loggedFarmer.name}! Kisan portal session active.`);
+            loadAllData();
+          }}
+          onAdminLoginSuccess={(officer) => {
+            setIsLoggedIn(true);
+            setActiveTab('admin');
+            showToast(`Welcome Officer ${officer.name}! APMC Mandi administration console active.`);
+          }}
+          onStartNewFarmerRegistration={() => {
+            setIsLoggedIn(true);
+            setIsRegistered(false);
+            showToast('New farmer registration initiated.');
+          }}
+          lang={lang}
+          onLanguageChange={setLang}
+          canDismiss={true}
+          onClose={() => {
+            setIsLoggedIn(true);
+            setIsRegistered(true);
+            showToast('Browsing as Guest Farmer (Ramesh Patil).');
+          }}
+        />
+      </AgriculturalBackground>
+    );
+  }
 
   // If user is not yet registered and not currently inspecting Admin console, show Registration Panel
   if (!isRegistered && activeTab !== 'admin') {
@@ -387,6 +473,7 @@ export default function App() {
         onOpenAdmin={() => setActiveTab('admin')}
         onBackToFarmerPortal={() => setActiveTab('home')}
         onStartNewRegistration={handleStartNewRegistration}
+        onOpenLogin={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -466,6 +553,10 @@ export default function App() {
             }}
             speechEnabled={speechEnabled}
             onAnnounceTurn={handleAnnounce}
+            adminOfficer={DEFAULT_OFFICER}
+            gatePermissionGranted={currentStageIndex >= 5}
+            assignedBay="Bay A (Main Weighbridge)"
+            onGrantGatePermission={handleGrantGatePermissionForFarmer}
           />
         )}
 
@@ -532,6 +623,7 @@ export default function App() {
           currentStageIndex={currentStageIndex}
           onConfirmArrival={handleConfirmArrival}
           onSetStageIndex={setCurrentStageIndex}
+          onReleaseSlot={handleReleaseSlot}
         />
       )}
 
@@ -545,15 +637,35 @@ export default function App() {
         lang={lang}
       />
 
-      {/* Farmer Authentication & Switch User Modal (Section 1) */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={(loggedFarmer) => {
-          setFarmer(loggedFarmer);
-          showToast(`Logged in as ${loggedFarmer.name} (${loggedFarmer.farmer_id})`);
-        }}
-      />
+      {/* Dual Login Pop-up (Amazon Style): Switch between Farmer & Mandi Admin */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/80 backdrop-blur-xs overflow-y-auto">
+          <AmazonLoginModal
+            isOpen={true}
+            onClose={() => setIsAuthModalOpen(false)}
+            canDismiss={true}
+            onFarmerLoginSuccess={(loggedFarmer) => {
+              setFarmer(loggedFarmer);
+              setIsRegistered(true);
+              setIsAuthModalOpen(false);
+              setActiveTab('home');
+              showToast(`Switched account to ${loggedFarmer.name} (${loggedFarmer.farmer_id})`);
+              loadAllData();
+            }}
+            onAdminLoginSuccess={(officer) => {
+              setIsAuthModalOpen(false);
+              setActiveTab('admin');
+              showToast(`Switched to Mandi Officer Console: ${officer.name} (${officer.officer_id})`);
+            }}
+            onStartNewFarmerRegistration={() => {
+              setIsAuthModalOpen(false);
+              handleStartNewRegistration();
+            }}
+            lang={lang}
+            onLanguageChange={setLang}
+          />
+        </div>
+      )}
     </div>
   );
 }

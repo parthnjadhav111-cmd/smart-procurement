@@ -27,6 +27,18 @@ export interface FarmerProfile {
   bank_name?: string;
   bank_account?: string;
   bank_ifsc?: string;
+  vehicle_number?: string;
+}
+
+export interface SlotBookedFarmer {
+  token_id: string;
+  farmer_id?: string;
+  farmer_name: string;
+  crop_type: string;
+  quantity: number;
+  vehicle_number?: string;
+  gate_status: 'Entered' | 'Waiting Gate' | 'Weighbridge' | 'Completed' | 'Scheduled';
+  arrival_time?: string;
 }
 
 export interface CenterSlot {
@@ -34,6 +46,7 @@ export interface CenterSlot {
   time_range: string; // e.g. "09:00 AM – 10:00 AM"
   total_slots: number;
   available_slots: number;
+  booked_farmers?: SlotBookedFarmer[];
 }
 
 export interface ProcurementCenter {
@@ -87,8 +100,16 @@ export interface Appointment {
   created_at: string;
   is_late?: boolean;
   vehicle_number?: string;
+  vehicle_type?: string;
+  driver_name?: string;
+  driver_phone?: string;
+  moisture_content?: number;
+  gat_number?: string;
+  variety?: string;
+  bags_count?: number;
   gate_bay?: string;
   checked_in_at?: string;
+  gate_permission_granted?: boolean;
 }
 
 export interface QueueItem {
@@ -100,6 +121,9 @@ export interface QueueItem {
   position: number;
   is_current_farmer?: boolean;
   time_slot?: string;
+  vehicle_number?: string;
+  gate_bay?: string;
+  gate_permitted?: boolean;
 }
 
 export interface QueueStatusResponse {
@@ -128,6 +152,14 @@ export interface NotificationItem {
   type: 'appointment' | 'queue' | 'turn' | 'schedule' | 'status';
   read_status: boolean;
   created_at: string;
+  digital_token?: string;
+  on_time_status?: string;
+  assigned_bay?: string;
+  vehicle_number?: string;
+  grace_period_mins?: number;
+  grace_period_deadline?: string;
+  slot_release_warning?: string;
+  can_cancel?: boolean;
 }
 
 export type ProcurementStage =
@@ -198,6 +230,8 @@ export interface AdminOfficerProfile {
   center_name: string;
   jurisdiction: string;
   badge_number: string;
+  role?: string;
+  phone?: string;
 }
 
 export interface AdminStats {

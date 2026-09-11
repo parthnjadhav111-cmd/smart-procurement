@@ -12,6 +12,8 @@ import {
   Check,
   ChevronRight,
   Sparkles,
+  ShieldCheck,
+  Truck,
 } from 'lucide-react';
 import { QueueItem, ProcurementCenter, Language } from '../../types';
 
@@ -20,6 +22,7 @@ interface AdminQueueDispatchProps {
   center: ProcurementCenter;
   onCallToken: (tokenId?: string, counterNumber?: number) => Promise<{ called_token: string; counter: number }>;
   onUpdateTokenStatus: (tokenId: string, status: QueueItem['status']) => Promise<boolean>;
+  onGrantGatePermission?: (tokenId: string, details?: { vehicle_number?: string; gate_bay?: string }) => Promise<any>;
   onUpdateCenterConfig: (updates: {
     active_counters?: number;
     status?: ProcurementCenter['status'];
@@ -40,6 +43,7 @@ export const AdminQueueDispatch: React.FC<AdminQueueDispatchProps> = ({
   center,
   onCallToken,
   onUpdateTokenStatus,
+  onGrantGatePermission,
   onUpdateCenterConfig,
   onCreateManualToken,
 }) => {
@@ -314,6 +318,7 @@ export const AdminQueueDispatch: React.FC<AdminQueueDispatchProps> = ({
                 <th className="p-3">Farmer Name</th>
                 <th className="p-3">Crop / Quantity</th>
                 <th className="p-3">Time Slot</th>
+                <th className="p-3">Gate Entry Status</th>
                 <th className="p-3">Current Status</th>
                 <th className="p-3 text-right">Quick Action</th>
               </tr>
@@ -340,6 +345,32 @@ export const AdminQueueDispatch: React.FC<AdminQueueDispatchProps> = ({
                   </td>
                   <td className="p-3 text-stone-600">{item.crop_type}</td>
                   <td className="p-3 text-stone-500 font-mono text-[11px]">{item.time_slot}</td>
+                  <td className="p-3">
+                    {item.gate_permitted ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Permitted ({item.gate_bay || 'Bay A'})</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (onGrantGatePermission) {
+                            await onGrantGatePermission(item.token_id, {
+                              vehicle_number: item.vehicle_number || 'MH-12-TR-8841',
+                              gate_bay: item.gate_bay || 'Bay A (Main Weighbridge)',
+                            });
+                            setLastAnnouncement(`Gate entry permission granted to Farmer for Token ${item.token_id}! Notification dispatched.`);
+                          }
+                        }}
+                        className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] inline-flex items-center gap-1 shadow-xs transition-all"
+                        title="Grant gate permission & notify farmer"
+                      >
+                        <ShieldCheck className="w-3 h-3" />
+                        <span>Grant Gate Entry</span>
+                      </button>
+                    )}
+                  </td>
                   <td className="p-3">
                     <span
                       className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${

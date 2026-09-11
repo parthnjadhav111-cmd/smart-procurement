@@ -217,6 +217,14 @@ export const api = {
     };
   },
 
+  async getSlots(centerId: string = 'PC-101'): Promise<CenterSlot[]> {
+    try {
+      const res = await fetch(`/api/centers/${centerId}/slots`);
+      if (res.ok) return await res.json();
+    } catch (_) {}
+    return INITIAL_SLOTS;
+  },
+
   // --- Crops ---
   async getCrops(): Promise<CropRecord[]> {
     try {
@@ -260,10 +268,22 @@ export const api = {
   },
 
   async bookSlot(data: {
-    crop_id: string;
+    crop_id?: string;
     center_id: string;
     date: string;
     time_slot: string;
+    slot_id?: string;
+    crop_type?: any;
+    quantity?: number;
+    unit?: string;
+    vehicle_number?: string;
+    vehicle_type?: string;
+    driver_name?: string;
+    driver_phone?: string;
+    moisture_content?: number;
+    gat_number?: string;
+    variety?: string;
+    bags_count?: number;
   }): Promise<Appointment> {
     try {
       const res = await fetch('/api/appointments', {
@@ -281,10 +301,10 @@ export const api = {
     const newApt: Appointment = {
       appointment_id: `APT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       farmer_id: localFarmer.farmer_id,
-      crop_id: crop ? crop.crop_id : 'CR-2026-1027',
-      crop_type: crop ? crop.crop_type : 'Paddy',
-      quantity: crop ? crop.quantity : 800,
-      unit: crop ? crop.unit : 'kg',
+      crop_id: crop ? crop.crop_id : `CR-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      crop_type: data.crop_type || (crop ? crop.crop_type : 'Paddy'),
+      quantity: data.quantity ? Number(data.quantity) : (crop ? crop.quantity : 800),
+      unit: data.unit || (crop ? crop.unit : 'kg'),
       center_id: center.center_id,
       center_name: center.name,
       center_address: center.address,
@@ -295,6 +315,15 @@ export const api = {
       token_id: tokenId,
       status: 'Confirmed',
       created_at: new Date().toISOString(),
+      vehicle_number: data.vehicle_number || localFarmer.vehicle_number || 'MH-12-TR-8841',
+      vehicle_type: data.vehicle_type || 'Tractor Trolley',
+      driver_name: data.driver_name || localFarmer.name,
+      driver_phone: data.driver_phone || localFarmer.phone,
+      moisture_content: data.moisture_content || 12.0,
+      gat_number: data.gat_number || 'Gat No. 142/B',
+      variety: data.variety || 'Grade A',
+      bags_count: data.bags_count || 16,
+      gate_bay: 'Bay A (Main Weighbridge)',
     };
     localAppointments.unshift(newApt);
 
@@ -307,6 +336,9 @@ export const api = {
       position: localQueue.length + 1,
       is_current_farmer: true,
       time_slot: newApt.time_slot,
+      vehicle_number: newApt.vehicle_number,
+      gate_bay: 'Bay A',
+      gate_permitted: false,
     });
 
     return newApt;
@@ -377,24 +409,24 @@ export const api = {
 
     const currentItem = localQueue[localServingIdx] || localQueue[0];
     const currentToken = currentItem ? currentItem.token_id : 'P-101';
-    const userIndex = localQueue.findIndex((q) => q.token_id === tokenId);
-    const farmersAhead = userIndex >= 0 ? Math.max(0, userIndex - localServingIdx) : 4;
-    const estimatedWaitingMins = Math.round((farmersAhead * 7) / 2);
+    const userIndex = tokenId ? localQueue.findIndex((q) => q.token_id === tokenId) : -1;
+    const farmersAhead = userIndex >= 0 ? Math.max(0, userIndex - localServingIdx) : 0;
+    const estimatedWaitingMins = userIndex >= 0 ? Math.round((farmersAhead * 7) / 2) : 0;
 
     return {
       center_id: 'PC-101',
       center_name: 'Pune District Procurement Center',
       current_token: currentToken,
-      user_token: tokenId || 'P-105',
+      user_token: tokenId || '',
       farmers_ahead: farmersAhead,
       estimated_waiting_mins: estimatedWaitingMins,
       ai_predicted_waiting_mins: Math.max(0, Math.round(estimatedWaitingMins * 0.92)),
-      recommended_arrival_time: '10:35 AM',
-      queue_status_label: farmersAhead === 0 ? 'Your Turn Now' : 'Moving Normally',
+      recommended_arrival_time: userIndex >= 0 ? '10:35 AM' : '--',
+      queue_status_label: userIndex >= 0 ? (farmersAhead === 0 ? 'Your Turn Now' : 'Moving Normally') : 'Pending Booking',
       queue_list: localQueue,
       active_counters: 2,
       avg_time_per_farmer: 7,
-      scheduled_slot: '10:00 AM – 11:00 AM',
+      scheduled_slot: userIndex >= 0 ? (localAppointments[0]?.time_slot || '10:00 AM – 11:00 AM') : '',
       is_late: false,
       grace_period_mins: 15,
     };
@@ -574,28 +606,113 @@ export const api = {
       if (res.ok) return true;
     } catch (_) {}
 
-    const apt = localAppointments.find((a) => a.appointment_id === appointmentId);
+    const apt = localAppointments.find((a) => a.appointment_id === appointmentId || a.token_id === appointmentId);
     if (apt) {
       apt.status = 'Checked-In';
+      apt.gate_permission_granted = true;
       apt.vehicle_number = details.vehicle_number;
       apt.gate_bay = details.gate_bay;
       apt.checked_in_at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       // also sync queue if present
       let q = localQueue.find((item) => item.token_id === apt.token_id);
-      if (q && q.status === 'Completed') q.status = 'Waiting';
+      if (q) {
+        q.gate_permitted = true;
+        q.vehicle_number = details.vehicle_number;
+        q.gate_bay = details.gate_bay;
+        if (q.status === 'Completed') q.status = 'Waiting';
+      }
 
       localNotifications.unshift({
         notification_id: `NOTIF-${Date.now()}`,
         farmer_id: apt.farmer_id,
-        title: 'Gate Entry Verified',
-        message: `Vehicle ${details.vehicle_number} checked in at ${details.gate_bay}. Please proceed to Weighbridge Scale.`,
+        title: 'Gate Permission Granted by Center Admin!',
+        message: `Mandi Admin Officer verified vehicle ${details.vehicle_number} at ${details.gate_bay}. Please proceed to Weighbridge Scale.`,
         type: 'queue',
         read_status: false,
         created_at: new Date().toISOString(),
+        digital_token: apt.token_id,
+        on_time_status: `On-Time Verified (${apt.time_slot})`,
+        assigned_bay: details.gate_bay,
+        vehicle_number: details.vehicle_number,
+        grace_period_mins: 15,
+        grace_period_deadline: '15 Minutes Grace Period Active',
+        slot_release_warning: 'Unreported slots will be automatically cancelled and released to the next standby farmer.',
+        can_cancel: true,
       });
     }
     return true;
+  },
+
+  async grantGatePermission(
+    appointmentIdOrToken: string,
+    details: { vehicle_number?: string; gate_bay?: string } = {}
+  ): Promise<boolean> {
+    const payload = {
+      vehicle_number: details.vehicle_number || 'MH-12-TR-8841',
+      gate_bay: details.gate_bay || 'Bay A (Main Weighbridge)',
+    };
+    try {
+      const res = await fetch(`/api/admin/appointments/${appointmentIdOrToken}/grant-permission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) return true;
+    } catch (_) {}
+    return this.checkInAppointment(appointmentIdOrToken, payload);
+  },
+
+  async releaseSlot(tokenId: string, reason?: string): Promise<boolean> {
+    try {
+      const res = await fetch('/api/farmer/release-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token_id: tokenId, reason }),
+      });
+      if (res.ok) return true;
+    } catch (_) {}
+
+    const targetToken = tokenId || 'P-105';
+    const apt = localAppointments.find((a) => a.token_id === targetToken);
+    if (apt) apt.status = 'Cancelled';
+    const qIdx = localQueue.findIndex((q) => q.token_id === targetToken);
+    if (qIdx >= 0) localQueue.splice(qIdx, 1);
+
+    localNotifications.unshift({
+      notification_id: `NOTIF-CANCEL-${Date.now()}`,
+      farmer_id: apt?.farmer_id || localFarmer.farmer_id,
+      title: 'Slot Cancelled & Released',
+      message: `Token ${targetToken} has been released${reason ? ` (${reason})` : ''}. The standby queue has been advanced.`,
+      type: 'status',
+      read_status: false,
+      created_at: new Date().toISOString(),
+    });
+    return true;
+  },
+
+  async getProcurementStatus(): Promise<any> {
+    try {
+      const res = await fetch('/api/farmer/procurement-status');
+      if (res.ok) return await res.json();
+    } catch (_) {}
+    const apt = localAppointments[0];
+    return {
+      success: true,
+      current_stage_index: apt?.gate_permission_granted ? 5 : 4,
+      center_admin: {
+        officer_id: localOfficer.officer_id,
+        name: localOfficer.name,
+        role: localOfficer.role,
+        center_id: 'PC-101',
+        center_name: 'Pune District Procurement Center',
+        live_sync_status: 'Connected (Live APMC Ingress)',
+      },
+      appointment: apt,
+      gate_permission_granted: !!apt?.gate_permission_granted,
+      assigned_bay: apt?.gate_bay || 'Bay A (Main Weighbridge)',
+      vehicle_number: apt?.vehicle_number || 'MH-12-TR-8841',
+    };
   },
 
   async callToken(tokenId?: string, counterNumber: number = 1): Promise<{ called_token: string; counter: number }> {
@@ -817,5 +934,21 @@ export const api = {
       pending_inspections: localQueue.filter((q) => q.status === 'Serving').length,
       counters_active: 2,
     };
+  },
+
+  async getDatabaseStatus(): Promise<any> {
+    try {
+      const res = await fetch('/api/database/status');
+      if (res.ok) return await res.json();
+    } catch (_) {}
+    return { status: 'healthy', persistent: true };
+  },
+
+  async getSlotsWithFarmers(): Promise<any> {
+    try {
+      const res = await fetch('/api/slots/with-farmers');
+      if (res.ok) return await res.json();
+    } catch (_) {}
+    return null;
   },
 };

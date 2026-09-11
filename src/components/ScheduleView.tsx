@@ -13,8 +13,10 @@ import {
   PlusCircle,
   XCircle,
 } from 'lucide-react';
-import { Appointment, Language } from '../types';
+import { Appointment, Language, CenterSlot } from '../types';
 import { translations } from '../translations/translations';
+import { INITIAL_SLOTS } from '../data/mockData';
+import { Users, Truck, ArrowRight } from 'lucide-react';
 
 interface ScheduleViewProps {
   appointments: Appointment[];
@@ -25,6 +27,8 @@ interface ScheduleViewProps {
   onRescheduleAppointment: (id: string) => void;
   onSimulateLateArrival: (id: string) => void;
   farmerLocation: { latitude: number; longitude: number };
+  slots?: CenterSlot[];
+  onSelectSlotToBook?: (slot: CenterSlot) => void;
 }
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({
@@ -36,6 +40,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   onRescheduleAppointment,
   onSimulateLateArrival,
   farmerLocation,
+  slots = INITIAL_SLOTS,
+  onSelectSlotToBook,
 }) => {
   const t = translations[lang];
   const [selectedTokenModal, setSelectedTokenModal] = useState<Appointment | null>(null);
@@ -226,6 +232,133 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           })}
         </div>
       )}
+
+      {/* TODAY'S APMC TIME SLOTS & BOOKED DEMO FARMERS */}
+      <div className="mt-8 bg-white rounded-3xl border border-stone-200 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-700" />
+              <h3 className="text-base font-extrabold text-stone-900">
+                Today's APMC Slot Roster & Booked Farmers
+              </h3>
+            </div>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Live schedule distribution across all 7 operational Mandi time windows.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            Total Slots Today: 105
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {slots.map((slot) => {
+            const isFull = slot.available_slots <= 0;
+            const bookedFarmers = slot.booked_farmers || [];
+            return (
+              <div
+                key={slot.id}
+                className={`p-4 rounded-2xl border-2 transition-all space-y-2.5 ${
+                  isFull
+                    ? 'bg-rose-50/40 border-rose-300'
+                    : 'bg-stone-50 border-stone-200 hover:border-emerald-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
+                    <Clock className={`w-3.5 h-3.5 ${isFull ? 'text-rose-600' : 'text-emerald-700'}`} />
+                    {slot.time_range}
+                  </span>
+                  {isFull ? (
+                    <span className="text-[10px] font-black text-rose-800 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-300">
+                      🔴 BOOKED / NOT AVAILABLE
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full border border-emerald-300">
+                      🟢 {slot.available_slots} available / {slot.total_slots}
+                    </span>
+                  )}
+                </div>
+
+                {bookedFarmers.length > 0 ? (
+                  <div className="space-y-1.5 pt-1 border-t border-stone-200/60">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-stone-400 block">
+                      Booked Farmers ({bookedFarmers.length}):
+                    </span>
+                    <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                      {bookedFarmers.map((f) => (
+                        <div
+                          key={f.token_id}
+                          className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-stone-200/80 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-[11px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded">
+                              {f.token_id}
+                            </span>
+                            <span className="font-bold text-stone-900">{f.farmer_name}</span>
+                            <span className="text-[11px] text-stone-500 font-medium">
+                              ({f.crop_type})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {f.vehicle_number && (
+                              <span className="text-[10px] text-stone-500 font-mono flex items-center gap-0.5">
+                                <Truck className="w-3 h-3 text-stone-400" />
+                                {f.vehicle_number}
+                              </span>
+                            )}
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                f.gate_status === 'Completed'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : f.gate_status === 'Entered' || f.gate_status === 'Weighbridge'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {f.gate_status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-stone-400 italic py-1">
+                    No farmers booked in this slot yet (all {slot.available_slots} slots open)
+                  </div>
+                )}
+
+                <div className="pt-1">
+                  {isFull ? (
+                    <button
+                      disabled
+                      className="w-full py-1.5 px-3 rounded-xl bg-stone-200 text-stone-500 font-bold text-xs cursor-not-allowed text-center"
+                    >
+                      Slot Full • Not Available
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (onSelectSlotToBook) {
+                          onSelectSlotToBook(slot);
+                        } else {
+                          onOpenCropRegistration();
+                        }
+                      }}
+                      className="w-full py-1.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <span>Select & Book Slot</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* DIGITAL PROCUREMENT TOKEN MODAL (Section 8) */}
       {selectedTokenModal && (

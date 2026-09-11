@@ -189,12 +189,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleCheckIn = async (appointmentId: string, details: { vehicle_number: string; gate_bay: string }) => {
     const success = await api.checkInAppointment(appointmentId, details);
     if (success) {
-      const [updatedApts, updatedQ] = await Promise.all([
+      const [updatedApts, updatedQ, updatedStats] = await Promise.all([
         api.getAdminAppointments(),
         api.getQueueList(),
+        api.getAdminStats(),
       ]);
       setAppointments(updatedApts);
       setQueueList(updatedQ);
+      setStats(updatedStats);
+    }
+    return success;
+  };
+
+  const handleGrantGatePermission = async (
+    appointmentIdOrToken: string,
+    details?: { vehicle_number?: string; gate_bay?: string }
+  ) => {
+    const success = await api.grantGatePermission(appointmentIdOrToken, details);
+    if (success) {
+      const [updatedApts, updatedQ, updatedStats] = await Promise.all([
+        api.getAdminAppointments(),
+        api.getQueueList(),
+        api.getAdminStats(),
+      ]);
+      setAppointments(updatedApts);
+      setQueueList(updatedQ);
+      setStats(updatedStats);
     }
     return success;
   };
@@ -345,6 +365,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           center={currentCenter}
           onCallToken={handleCallToken}
           onUpdateTokenStatus={handleUpdateTokenStatus}
+          onGrantGatePermission={handleGrantGatePermission}
           onUpdateCenterConfig={handleUpdateCenterConfig}
           onCreateManualToken={handleCreateManualToken}
           lang={lang}

@@ -8,6 +8,7 @@ import {
   Building2,
   ArrowLeft,
   UserPlus,
+  LogIn,
 } from 'lucide-react';
 import { FarmerProfile, Language } from '../types';
 import { translations } from '../translations/translations';
@@ -28,6 +29,7 @@ interface NavbarProps {
   onOpenAdmin?: () => void;
   onBackToFarmerPortal?: () => void;
   onStartNewRegistration?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,6 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAdmin,
   onBackToFarmerPortal,
   onStartNewRegistration,
+  onOpenLogin,
 }) => {
   const t = translations[lang] || translations.en;
   const currentFarmerName = farmer?.name || farmerName || 'Ramesh Patil';
@@ -198,6 +201,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <UserPlus className="w-3.5 h-3.5 text-amber-700" />
               <span>New Farmer</span>
+            </button>
+          )}
+
+          {/* Dual Login Portal Button (Admin & Farmer) */}
+          {onOpenLogin && (
+            <button
+              onClick={onOpenLogin}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold transition-all shadow-2xs"
+              title="Open Login Portal (Farmer or Mandi Admin)"
+            >
+              <LogIn className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="hidden sm:inline">Login</span>
             </button>
           )}
 

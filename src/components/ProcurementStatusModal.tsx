@@ -12,9 +12,12 @@ import {
   Truck,
   RotateCcw,
   ArrowRight,
+  UserCheck,
+  Sparkles,
 } from 'lucide-react';
-import { ProcurementStageInfo, ProcurementStage, Language } from '../types';
+import { ProcurementStageInfo, ProcurementStage, Language, AdminOfficerProfile } from '../types';
 import { translations } from '../translations/translations';
+import { DEFAULT_OFFICER } from '../data/mockData';
 
 interface ProcurementStatusModalProps {
   onClose: () => void;
@@ -23,6 +26,11 @@ interface ProcurementStatusModalProps {
   currentStageIndex: number;
   onConfirmArrival: () => Promise<void> | void;
   onSetStageIndex: (idx: number) => void;
+  adminOfficer?: AdminOfficerProfile;
+  gatePermissionGranted?: boolean;
+  assignedBay?: string;
+  vehicleNumber?: string;
+  onAdminGrantPermission?: () => Promise<void> | void;
 }
 
 export const ProcurementStatusModal: React.FC<ProcurementStatusModalProps> = ({
@@ -32,6 +40,11 @@ export const ProcurementStatusModal: React.FC<ProcurementStatusModalProps> = ({
   currentStageIndex = 4,
   onConfirmArrival,
   onSetStageIndex,
+  adminOfficer = DEFAULT_OFFICER,
+  gatePermissionGranted = false,
+  assignedBay = 'Bay A (Main Weighbridge)',
+  vehicleNumber = 'MH-12-TR-8841',
+  onAdminGrantPermission,
 }) => {
   const t = translations[lang] || translations.en;
 
@@ -74,8 +87,10 @@ export const ProcurementStatusModal: React.FC<ProcurementStatusModalProps> = ({
       stage: 'farmer_arrived',
       title: '4. Farmer Arrived (Gate Verification)',
       description: 'Vehicle entry verified at APMC Main Gate Security.',
-      completedDetails: 'Tractor / Vehicle entry barcode scanned & Bay A Assigned.',
-      pendingDetails: 'Awaiting farmer arrival at APMC mandi gate.',
+      completedDetails: gatePermissionGranted
+        ? `Gate entry approved by ${adminOfficer.name} • ${assignedBay} • Vehicle ${vehicleNumber}.`
+        : 'Tractor / Vehicle entry barcode scanned & Bay A Assigned.',
+      pendingDetails: 'Awaiting gate entry approval from Center Admin.',
       actionLabel: 'Confirm Farmer Arrived at Gate',
     },
     {
@@ -157,30 +172,87 @@ export const ProcurementStatusModal: React.FC<ProcurementStatusModalProps> = ({
           </button>
         </div>
 
-        {/* Action Callout if Stage 4 is Pending Completion */}
+        {/* CONNECTED CENTER ADMIN STATUS BAR (Fix 1: Automatically connected to admin) */}
+        <div className="bg-stone-900 text-white px-4 py-3 border-b border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-800 flex items-center justify-center text-amber-300 font-bold shrink-0">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-stone-400">Center Admin:</span>
+                <strong className="text-stone-100 font-bold">{adminOfficer.name}</strong>
+                <span className="text-[10px] font-mono text-amber-300 bg-stone-800 px-1.5 py-0.5 rounded">
+                  {adminOfficer.officer_id}
+                </span>
+              </div>
+              <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>Live Admin Link Active • {adminOfficer.center_name || 'Pune Procurement Center (PC-101)'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            {gatePermissionGranted ? (
+              <span className="px-2.5 py-1 bg-emerald-900/80 text-emerald-300 border border-emerald-600 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>Gate Permission Granted</span>
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 bg-amber-950 text-amber-300 border border-amber-600 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                <span>Gate Awaiting Approval</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Action Callout if Stage 4 Gate Entry is not yet granted or can be granted */}
         {currentStageIndex === 4 && (
           <div className="bg-amber-50 border-b border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <Truck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-xs font-black text-amber-950 block">
-                  Task 4 Pending: Confirm Farmer Arrival
+                  {gatePermissionGranted
+                    ? 'Gate Entry Approved by Center Admin'
+                    : 'Stage 4: Mandatory APMC Mandi Gate Entry'}
                 </strong>
-                <p className="text-[11px] text-amber-900 leading-tight">
-                  Click below to confirm that your tractor/vehicle has reached the APMC mandi gate.
+                <p className="text-[11px] text-amber-900 leading-tight mt-0.5">
+                  {gatePermissionGranted
+                    ? `Officer ${adminOfficer.name} has granted gate access. Drive vehicle ${vehicleNumber} to ${assignedBay}.`
+                    : `Your vehicle is queueing at the gate. Center Admin ${adminOfficer.name} will grant entry barcode verification.`}
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={async () => {
-                await onConfirmArrival();
-              }}
-              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Complete Arrival</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {!gatePermissionGranted && onAdminGrantPermission && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onAdminGrantPermission();
+                  }}
+                  className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
+                  title="Simulate Admin granting gate permission"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Admin Grant Permission</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await onConfirmArrival();
+                }}
+                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirm Arrival (Stage 4)</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -218,79 +290,56 @@ export const ProcurementStatusModal: React.FC<ProcurementStatusModalProps> = ({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <h4
-                          className={`text-sm font-extrabold ${
-                            isCurrent
-                              ? 'text-amber-950'
-                              : isDone
-                              ? 'text-stone-900'
-                              : 'text-stone-500'
-                          }`}
-                        >
+                        <h4 className="font-extrabold text-stone-900 text-xs sm:text-sm">
                           {st.title}
                         </h4>
                         {isDone && (
-                          <span className="px-2 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
                             Completed
                           </span>
                         )}
                         {isCurrent && (
-                          <span className="px-2 py-0.2 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-400">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 animate-pulse">
                             In Progress
                           </span>
                         )}
                       </div>
+
+                      {st.index > currentStageIndex && (
+                        <span className="text-[10px] font-semibold text-stone-400">
+                          Upcoming
+                        </span>
+                      )}
                     </div>
 
-                    <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                    <p className="text-xs text-stone-500 mt-1 leading-relaxed">
                       {st.description}
                     </p>
 
-                    <div
-                      className={`mt-2 text-[11px] font-medium p-2 rounded-xl border ${
-                        isDone
-                          ? 'text-emerald-800 bg-emerald-50/80 border-emerald-200'
-                          : isCurrent
-                          ? 'text-amber-900 bg-white/90 border-amber-200'
-                          : 'text-stone-500 bg-stone-50 border-stone-200/60'
-                      }`}
-                    >
-                      {isDone ? `✓ ${st.completedDetails}` : isCurrent ? `Current: ${st.completedDetails}` : st.pendingDetails}
-                    </div>
-
-                    {/* Stage 4 Interactive Action */}
-                    {isCurrent && st.index === 4 && (
-                      <div className="mt-3 pt-2 border-t border-amber-200 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-amber-900 font-semibold">
-                          Arrived at mandi gate?
-                        </span>
-                        <button
-                          onClick={async () => {
-                            await onConfirmArrival();
-                          }}
-                          className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Complete Task 4 (Arrived)</span>
-                        </button>
+                    <div className="mt-2.5 pt-2 border-t border-stone-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="text-[11px] font-mono text-stone-600">
+                        {isDone ? (
+                          <span className="text-emerald-800 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" />
+                            {st.completedDetails}
+                          </span>
+                        ) : (
+                          <span className="text-stone-500">{st.pendingDetails}</span>
+                        )}
                       </div>
-                    )}
 
-                    {/* Generic Advance Button for Testing subsequent stages */}
-                    {isCurrent && st.index !== 4 && (
-                      <div className="mt-3 pt-2 border-t border-amber-200 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-amber-900 font-semibold">
-                          Proceed to next lifecycle step?
-                        </span>
+                      {/* Interactive Stage Advancement button */}
+                      {isCurrent && st.actionLabel && (
                         <button
+                          type="button"
                           onClick={() => onSetStageIndex(st.index + 1)}
-                          className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all"
+                          className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 self-start sm:self-auto"
                         >
-                          <span>{st.actionLabel || 'Complete Step'}</span>
+                          <span>{st.actionLabel}</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -298,20 +347,21 @@ export const ProcurementStatusModal: React.FC<ProcurementStatusModalProps> = ({
           </div>
         </div>
 
-        {/* Footer with Reset Controls */}
-        <div className="p-3 sm:p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-between gap-2">
+        {/* Footer */}
+        <div className="p-3.5 bg-stone-50 border-t border-stone-200 flex items-center justify-between text-xs">
           <button
-            onClick={() => onSetStageIndex(4)}
-            className="px-3 py-2 text-stone-600 hover:text-stone-900 hover:bg-stone-200/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all"
-            title="Reset to Stage 4 (Farmer Arrived)"
+            type="button"
+            onClick={() => onSetStageIndex(1)}
+            className="text-stone-500 hover:text-stone-700 flex items-center gap-1 font-semibold"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset to Stage 4</span>
+            <span>Reset Demo to Stage 1</span>
           </button>
 
           <button
+            type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs"
+            className="px-4 py-2 bg-stone-900 text-white font-bold rounded-xl hover:bg-stone-800 transition-colors"
           >
             Close Tracker
           </button>
